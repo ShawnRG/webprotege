@@ -1,20 +1,25 @@
 package edu.stanford.bmir.protege.web.server.app;
 
+import org.glassfish.jersey.servlet.ServletContainer;
+
 import dagger.Component;
 import edu.stanford.bmir.protege.web.server.access.AccessManager;
 import edu.stanford.bmir.protege.web.server.api.ApiModule;
 import edu.stanford.bmir.protege.web.server.dispatch.DispatchServlet;
-import edu.stanford.bmir.protege.web.server.download.ProjectDownloadServlet;
-import edu.stanford.bmir.protege.web.server.inject.*;
+import edu.stanford.bmir.protege.web.server.download.ProjectDownloadResource;
+import edu.stanford.bmir.protege.web.server.inject.ActionHandlersModule;
+import edu.stanford.bmir.protege.web.server.inject.ApplicationModule;
+import edu.stanford.bmir.protege.web.server.inject.AuthenticationModule;
+import edu.stanford.bmir.protege.web.server.inject.ConfigurationTasksModule;
+import edu.stanford.bmir.protege.web.server.inject.DbModule;
+import edu.stanford.bmir.protege.web.server.inject.FileSystemConfigurationModule;
+import edu.stanford.bmir.protege.web.server.inject.ProjectComponent;
 import edu.stanford.bmir.protege.web.server.inject.project.ProjectModule;
 import edu.stanford.bmir.protege.web.server.project.ProjectCacheManager;
-import edu.stanford.bmir.protege.web.server.project.ProjectDisposablesManager;
 import edu.stanford.bmir.protege.web.server.upload.FileUploadServlet;
 import edu.stanford.bmir.protege.web.server.user.UserDetailsManager;
-import edu.stanford.bmir.protege.web.server.util.DisposableObjectManager;
 import edu.stanford.bmir.protege.web.shared.inject.ApplicationSingleton;
 import edu.stanford.bmir.protege.web.shared.inject.SharedApplicationModule;
-import org.glassfish.jersey.servlet.ServletContainer;
 
 /**
  * Matthew Horridge
@@ -47,7 +52,7 @@ public interface ServerComponent {
 
     ServletContainer getJerseyServletContainer();
 
-    ProjectDownloadServlet getProjectDownloadServlet();
+    ProjectDownloadResource getProjectDownloadServlet();
 
     DispatchServlet getDispatchServlet();
 

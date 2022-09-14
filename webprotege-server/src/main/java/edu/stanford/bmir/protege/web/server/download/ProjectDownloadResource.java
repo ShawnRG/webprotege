@@ -1,28 +1,33 @@
 package edu.stanford.bmir.protege.web.server.download;
 
-import edu.stanford.bmir.protege.web.server.access.AccessManager;
-import edu.stanford.bmir.protege.web.server.access.ProjectResource;
-import edu.stanford.bmir.protege.web.server.access.Subject;
-import edu.stanford.bmir.protege.web.server.app.ServerSingleton;
-import edu.stanford.bmir.protege.web.server.session.WebProtegeSession;
-import edu.stanford.bmir.protege.web.server.session.WebProtegeSessionImpl;
-import edu.stanford.bmir.protege.web.shared.access.BuiltInAction;
-import edu.stanford.bmir.protege.web.shared.inject.ApplicationSingleton;
-import edu.stanford.bmir.protege.web.shared.project.ProjectId;
-import edu.stanford.bmir.protege.web.shared.revision.RevisionNumber;
-import edu.stanford.bmir.protege.web.shared.user.UserId;
+import static edu.stanford.bmir.protege.web.server.logging.RequestFormatter.formatAddr;
+import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
+import static javax.ws.rs.core.Response.Status.FORBIDDEN;
+
+import java.io.IOException;
+
+import javax.annotation.Nonnull;
+import javax.annotation.PreDestroy;
+import javax.inject.Inject;
+import javax.servlet.http.HttpServletRequest;
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
+import javax.ws.rs.Produces;
+import javax.ws.rs.core.Context;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nonnull;
-import javax.inject.Inject;
-import javax.servlet.ServletException;
-import javax.servlet.http.HttpServlet;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-
-import static edu.stanford.bmir.protege.web.server.logging.RequestFormatter.formatAddr;
+import edu.stanford.bmir.protege.web.server.access.AccessManager;
+import edu.stanford.bmir.protege.web.server.access.ProjectResource;
+import edu.stanford.bmir.protege.web.server.access.Subject;
+import edu.stanford.bmir.protege.web.server.api.ApiRootResource;
+import edu.stanford.bmir.protege.web.shared.access.BuiltInAction;
+import edu.stanford.bmir.protege.web.shared.project.ProjectId;
+import edu.stanford.bmir.protege.web.shared.revision.RevisionNumber;
+import edu.stanford.bmir.protege.web.shared.user.UserId;
 
 /**
  * Author: Matthew Horridge<br>
@@ -34,10 +39,10 @@ import static edu.stanford.bmir.protege.web.server.logging.RequestFormatter.form
  * the piece of machinery that actually does the processing of request parameters and the downloading.
  * </p>
  */
-@ApplicationSingleton
-public class ProjectDownloadServlet extends HttpServlet {
+@Path("download")
+public class ProjectDownloadResource implements ApiRootResource {
 
-    private static final Logger logger = LoggerFactory.getLogger(ProjectDownloadServlet.class);
+    private static final Logger logger = LoggerFactory.getLogger(ProjectDownloadResource.class);
 
     @Nonnull
     private final AccessManager accessManager;
@@ -46,25 +51,24 @@ public class ProjectDownloadServlet extends HttpServlet {
     private final ProjectDownloadService projectDownloadService;
 
     @Inject
-    public ProjectDownloadServlet(@Nonnull AccessManager accessManager,
-                                  @Nonnull ProjectDownloadService projectDownloadService) {
+    public ProjectDownloadResource(@Nonnull AccessManager accessManager,
+                                   @Nonnull ProjectDownloadService projectDownloadService) {
         this.accessManager = accessManager;
         this.projectDownloadService = projectDownloadService;
     }
 
-    @Override
-    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        final WebProtegeSession webProtegeSession = new WebProtegeSessionImpl(req.getSession());
-        UserId userId = webProtegeSession.getUserInSession();
+    @GET
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    public Response download(@Nonnull @Context UserId userId, @Nonnull @Context HttpServletRequest req) throws IOException {
         FileDownloadParameters downloadParameters = new FileDownloadParameters(req);
         if(!downloadParameters.isProjectDownload()) {
             logger.info("Bad project download request from {} at {}.  Request URI: {}  Query String: {}",
-                        webProtegeSession.getUserInSession(),
+                        userId,
                         formatAddr(req),
                         req.getRequestURI(),
                         req.getQueryString());
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST);
-            return;
+            return Response.status(BAD_REQUEST)
+                    .build();
         }
         logger.info("Received download request from {} at {} for project {}",
                     userId,
@@ -75,25 +79,27 @@ public class ProjectDownloadServlet extends HttpServlet {
                                          new ProjectResource(downloadParameters.getProjectId()),
                                          BuiltInAction.DOWNLOAD_PROJECT)) {
             logger.info("Denied download request as user does not have permission to download this project.");
-            resp.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return Response.status(FORBIDDEN)
+                    .build();
         }
         else if (downloadParameters.isProjectDownload()) {
-            startProjectDownload(resp, userId, downloadParameters);
+            return startProjectDownload(userId, downloadParameters);
         }
+
+        return Response.serverError().build();
     }
 
-    private void startProjectDownload(HttpServletResponse resp,
+    private Response startProjectDownload(
                                       UserId userId,
                                       FileDownloadParameters downloadParameters) throws IOException {
         ProjectId projectId = downloadParameters.getProjectId();
         RevisionNumber revisionNumber = downloadParameters.getRequestedRevision();
         DownloadFormat format = downloadParameters.getFormat();
-        projectDownloadService.downloadProject(userId, projectId, revisionNumber, format, resp);
+        return projectDownloadService.downloadProject(userId, projectId, revisionNumber, format);
     }
 
-    @Override
+    @PreDestroy
     public void destroy() {
-        super.destroy();
         projectDownloadService.shutDown();
     }
 }

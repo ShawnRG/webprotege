@@ -1,21 +1,17 @@
 package edu.stanford.bmir.protege.web.server.app;
 
-import ch.qos.logback.classic.LoggerContext;
-import edu.stanford.bmir.protege.web.server.filter.WebProtegeWebAppFilter;
-import edu.stanford.bmir.protege.web.server.init.WebProtegeConfigurationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static edu.stanford.bmir.protege.web.server.logging.WebProtegeLogger.WebProtegeMarker;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.Date;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import static edu.stanford.bmir.protege.web.server.logging.WebProtegeLogger.WebProtegeMarker;
+import ch.qos.logback.classic.LoggerContext;
+import edu.stanford.bmir.protege.web.server.filter.WebProtegeWebAppFilter;
+import edu.stanford.bmir.protege.web.server.init.WebProtegeConfigurationException;
 
 public class WebProtegeServletContextListener implements ServletContextListener {
 
@@ -35,9 +31,6 @@ public class WebProtegeServletContextListener implements ServletContextListener 
 
             servletContext.addServlet("DispatchService", serverComponent.getDispatchServlet())
                           .addMapping("/webprotege/dispatchservice");
-
-            servletContext.addServlet("ProjectDownloadServlet", serverComponent.getProjectDownloadServlet())
-                          .addMapping("/download");
 
             servletContext.addServlet("FileUploadServlet", serverComponent.getFileUploadServlet())
                           .addMapping("/webprotege/submitfile");

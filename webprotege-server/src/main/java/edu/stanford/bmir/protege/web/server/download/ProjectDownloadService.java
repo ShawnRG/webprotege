@@ -1,22 +1,10 @@
 package edu.stanford.bmir.protege.web.server.download;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.util.concurrent.Striped;
-import edu.stanford.bmir.protege.web.server.app.ApplicationNameSupplier;
-import edu.stanford.bmir.protege.web.server.project.ProjectDetailsManager;
-import edu.stanford.bmir.protege.web.server.project.ProjectManager;
-import edu.stanford.bmir.protege.web.server.revision.HeadRevisionNumberFinder;
-import edu.stanford.bmir.protege.web.shared.inject.ApplicationSingleton;
-import edu.stanford.bmir.protege.web.shared.project.ProjectId;
-import edu.stanford.bmir.protege.web.shared.revision.RevisionNumber;
-import edu.stanford.bmir.protege.web.shared.user.UserId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
-import javax.annotation.Nonnull;
-import javax.inject.Inject;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Optional;
@@ -26,8 +14,23 @@ import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.Lock;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
+import javax.annotation.Nonnull;
+import javax.inject.Inject;
+import javax.ws.rs.core.Response;
+import javax.ws.rs.core.StreamingOutput;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.base.Stopwatch;
+import com.google.common.util.concurrent.Striped;
+
+import edu.stanford.bmir.protege.web.server.project.ProjectDetailsManager;
+import edu.stanford.bmir.protege.web.server.revision.HeadRevisionNumberFinder;
+import edu.stanford.bmir.protege.web.shared.inject.ApplicationSingleton;
+import edu.stanford.bmir.protege.web.shared.project.ProjectId;
+import edu.stanford.bmir.protege.web.shared.revision.RevisionNumber;
+import edu.stanford.bmir.protege.web.shared.user.UserId;
 
 /**
  * Matthew Horridge
@@ -73,11 +76,10 @@ public class ProjectDownloadService {
         this.createDownloadTaskFactory = checkNotNull(createDownloadTaskFactory);
     }
 
-    public void downloadProject(@Nonnull UserId requester,
-                                @Nonnull ProjectId projectId,
-                                @Nonnull RevisionNumber revisionNumber,
-                                @Nonnull DownloadFormat downloadFormat,
-                                @Nonnull HttpServletResponse response) throws IOException {
+    public Response downloadProject(@Nonnull UserId requester,
+                                    @Nonnull ProjectId projectId,
+                                    @Nonnull RevisionNumber revisionNumber,
+                                    @Nonnull DownloadFormat downloadFormat) throws IOException {
 
         RevisionNumber realRevisionNumber;
         if(revisionNumber.isHead()) {
@@ -95,12 +97,15 @@ public class ProjectDownloadService {
                                   downloadFormat,
                                   downloadPath);
 
-        transferFileToClient(projectId,
-                             requester,
-                             revisionNumber,
-                             downloadFormat,
-                             downloadPath,
-                             response);
+        String fileName = getClientSideFileName(projectId, revisionNumber, downloadFormat);
+        StreamingOutput outputStream = output -> transferFileToClient(projectId,
+                requester,
+                downloadPath,
+                output);
+        return Response.ok()
+                .entity(outputStream)
+                .header("Content-Disposition", "attachment; filename=\"" + fileName + "\"")
+                .build();
     }
 
     private void createDownloadIfNecessary(@Nonnull UserId requester,
@@ -157,17 +162,14 @@ public class ProjectDownloadService {
 
     private void transferFileToClient(@Nonnull ProjectId projectId,
                                       @Nonnull UserId userId,
-                                      @Nonnull RevisionNumber revisionNumber,
-                                      @Nonnull DownloadFormat downloadFormat,
                                       @Nonnull Path downloadSource,
-                                      @Nonnull HttpServletResponse response) {
+                                      @Nonnull OutputStream outputStream) {
 
-        String fileName = getClientSideFileName(projectId, revisionNumber, downloadFormat);
+
         FileTransferTask task = new FileTransferTask(projectId,
                                                      userId,
                                                      downloadSource,
-                                                     fileName,
-                                                     response);
+                                                     outputStream);
         Future<?> transferFuture = fileTransferExecutor.submit(task);
         try {
             transferFuture.get();
